@@ -1,1 +1,6 @@
 /target
+
+# Independent Python workload tool
+.venv/
+__pycache__/
+.pytest_cache/
