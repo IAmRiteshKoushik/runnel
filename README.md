@@ -14,7 +14,7 @@ podman compose up -d
 curl -u guest:guest -H 'content-type: application/json' -X PUT \
   http://localhost:15672/api/queues/%2F/runnel.input \
   -d '{"durable":true,"auto_delete":false,"arguments":{}}'
-export RUNNEL_SOURCE_URL='amqp://guest:guest@localhost:5672/%2F'
+export RUNNEL_URL='amqp://guest:guest@localhost:5672/%2F'
 cargo run --release --features workload --bin loggen -- --count 1000 --rate 100 --sizes 1024 8192 \
   --malformed-every 20 --incompatible-every 25
 ```
