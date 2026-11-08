@@ -78,7 +78,7 @@ impl Endpoint {
     }
     /// Resolve the broker URL without including its value in diagnostics.
     pub fn url(&self) -> Result<String, String> {
-        std::env::var(&self.url_env)
+        let url = std::env::var(&self.url_env)
             .ok()
             .filter(|url| !url.trim().is_empty())
             .ok_or_else(|| {
@@ -86,7 +86,14 @@ impl Endpoint {
                     "environment variable {} is missing or empty",
                     self.url_env
                 )
-            })
+            })?;
+        url.parse::<lapin::uri::AMQPUri>().map_err(|_| {
+            format!(
+                "environment variable {} contains an invalid AMQP URL",
+                self.url_env
+            )
+        })?;
+        Ok(url)
     }
 }
 

@@ -1,40 +1,33 @@
 use lapin::{
     BasicProperties, Confirmation, Connection, ConnectionProperties, options::*,
 };
-use runnel::{config, sanitization};
+use runnel::{
+    config,
+    pipeline::{self, Error, Sink, Source},
+};
 use std::{path::PathBuf, time::Duration};
 
-// A source owns settlement; a sink only reports whether publication succeeded.
-trait Source {
-    type Delivery;
-    async fn receive(&self) -> Result<Option<Self::Delivery>, ()>;
-    fn body(delivery: &Self::Delivery) -> &[u8];
-    async fn settle(delivery: Self::Delivery) -> Result<(), ()>;
-}
-trait Sink {
-    async fn publish(&self, body: &[u8]) -> Result<(), ()>;
-}
 struct RabbitSource {
     channel: lapin::Channel,
     queue: String,
 }
 impl Source for RabbitSource {
     type Delivery = lapin::message::BasicGetMessage;
-    async fn receive(&self) -> Result<Option<Self::Delivery>, ()> {
+    async fn receive(&self) -> Result<Option<Self::Delivery>, Error> {
         self.channel
             .basic_get(self.queue.clone().into(), BasicGetOptions::default())
             .await
-            .map_err(|_| ())
+            .map_err(|_| Error::Receive)
     }
     fn body(delivery: &Self::Delivery) -> &[u8] {
         &delivery.data
     }
-    async fn settle(delivery: Self::Delivery) -> Result<(), ()> {
+    async fn settle(delivery: Self::Delivery) -> Result<(), Error> {
         delivery
             .ack(BasicAckOptions::default())
             .await
             .map(|_| ())
-            .map_err(|_| ())
+            .map_err(|_| Error::Settle)
     }
 }
 struct RabbitSink {
@@ -43,7 +36,7 @@ struct RabbitSink {
     key: String,
 }
 impl Sink for RabbitSink {
-    async fn publish(&self, body: &[u8]) -> Result<(), ()> {
+    async fn publish(&self, body: &[u8]) -> Result<(), Error> {
         let confirmation = self
             .channel
             .basic_publish(
@@ -59,46 +52,53 @@ impl Sink for RabbitSink {
                     .with_delivery_mode(2),
             )
             .await
-            .map_err(|_| ())?
+            .map_err(|_| Error::Publish)?
             .await
-            .map_err(|_| ())?;
+            .map_err(|_| Error::Confirm)?;
         match confirmation {
             Confirmation::Ack(None) => Ok(()),
-            _ => Err(()),
+            _ => Err(Error::Unroutable),
         }
     }
 }
 async fn run(config: config::Config, source_url: String, sink_url: String) {
     loop {
-        if pipeline(&config, &source_url, &sink_url).await.is_err() {
-            eprintln!("pipeline stopped; retrying connection");
+        if let Err(error) =
+            connect_and_run(&config, &source_url, &sink_url).await
+        {
+            eprintln!("{error}; retrying connection");
             tokio::time::sleep(Duration::from_secs(2)).await;
         }
     }
 }
-async fn pipeline(
+async fn connect_and_run(
     config: &config::Config,
     source_url: &str,
     sink_url: &str,
-) -> Result<(), ()> {
+) -> Result<(), Error> {
     let source_connection =
         Connection::connect(source_url, ConnectionProperties::default())
             .await
-            .map_err(|_| ())?;
+            .map_err(|_| Error::SourceConnect)?;
     let sink_connection =
         Connection::connect(sink_url, ConnectionProperties::default())
             .await
-            .map_err(|_| ())?;
+            .map_err(|_| Error::SinkConnect)?;
     let source = RabbitSource {
-        channel: source_connection.create_channel().await.map_err(|_| ())?,
+        channel: source_connection
+            .create_channel()
+            .await
+            .map_err(|_| Error::SourceChannel)?,
         queue: config.source.routing_key.clone(),
     };
-    let sink_channel =
-        sink_connection.create_channel().await.map_err(|_| ())?;
+    let sink_channel = sink_connection
+        .create_channel()
+        .await
+        .map_err(|_| Error::SinkChannel)?;
     sink_channel
         .confirm_select(ConfirmSelectOptions::default())
         .await
-        .map_err(|_| ())?;
+        .map_err(|_| Error::ConfirmSelect)?;
     let sink = RabbitSink {
         channel: sink_channel,
         exchange: config.sink.exchange.clone(),
@@ -107,22 +107,15 @@ async fn pipeline(
     let path: Vec<&str> =
         config.redaction.path.iter().map(String::as_str).collect();
     loop {
-        let Some(delivery) = source.receive().await? else {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            continue;
-        };
-        let body =
-            match sanitization::redact(RabbitSource::body(&delivery), &path) {
-                Ok(body) => body,
-                Err(_) => {
-                    // Keep the original unacknowledged until an operator intervenes.
-                    eprintln!("event could not be sanitized; pipeline paused");
-                    std::future::pending::<()>().await;
-                    unreachable!();
-                }
-            };
-        sink.publish(&body).await?;
-        RabbitSource::settle(delivery).await?;
+        match pipeline::process_one(&source, &sink, &path).await {
+            Ok(true) => {}
+            Ok(false) => tokio::time::sleep(Duration::from_millis(100)).await,
+            Err(Error::Sanitize) => {
+                eprintln!("event could not be sanitized; pipeline paused");
+                std::future::pending::<()>().await;
+            }
+            Err(error) => return Err(error),
+        }
     }
 }
 #[tokio::main]
