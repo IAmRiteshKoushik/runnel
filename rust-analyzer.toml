@@ -1,0 +1,17 @@
+[cargo]
+features = ["workload"]
+
+# The user-level rust-analyzer config overrides cargo checks with a custom
+# command, so pass the workload feature through that command as well.
+[check]
+overrideCommand = [
+  "cargo",
+  "check",
+  "--workspace",
+  "--all-targets",
+  "--features",
+  "workload",
+  "--target-dir",
+  "target/rust-analyzer",
+  "--message-format=json",
+]
