@@ -54,3 +54,23 @@ fn checked_in_config_loads_both_endpoints() {
     assert_eq!(config.source.routing_key, "runnel.input");
     assert_eq!(config.sink.routing_key, "runnel.output");
 }
+
+#[test]
+fn pipeline_rejects_invalid_redaction_and_source_exchange() {
+    let endpoints = "[source]\nurl_env='URL'\nexchange=''\nrouting_key='in'\n[sink]\nurl_env='URL'\nexchange=''\nrouting_key='out'\n";
+    for redaction in [
+        "",
+        "\n[redaction]\npath=[]\n",
+        "\n[redaction]\npath=['request', '']\n",
+    ] {
+        with_config(&format!("{endpoints}{redaction}"), |path| {
+            assert!(load(path).is_err())
+        });
+    }
+    let invalid_source =
+        endpoints.replacen("exchange=''", "exchange='events'", 1);
+    with_config(
+        &format!("{invalid_source}\n[redaction]\npath=['token']\n"),
+        |path| assert!(load(path).is_err()),
+    );
+}

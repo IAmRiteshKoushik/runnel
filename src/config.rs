@@ -14,6 +14,12 @@ pub struct Endpoint {
 pub struct AppConfig {
     pub source: Endpoint,
     pub sink: Endpoint,
+    pub redaction: Redaction,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Redaction {
+    pub path: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -28,6 +34,16 @@ pub fn load(path: &Path) -> Result<AppConfig, String> {
         .map_err(|_| format!("invalid configuration in {}", path.display()))?;
     config.source.validate("source")?;
     config.sink.validate("sink")?;
+    if !config.source.exchange.is_empty() {
+        return Err(
+            "source exchange must be empty; routing_key names the queue".into(),
+        );
+    }
+    if config.redaction.path.is_empty()
+        || config.redaction.path.iter().any(|p| p.trim().is_empty())
+    {
+        return Err("redaction path must contain nonempty object keys".into());
+    }
     Ok(config)
 }
 
