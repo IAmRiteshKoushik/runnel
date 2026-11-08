@@ -1,2 +1,4 @@
 pub mod config;
-pub mod sanitization;
+pub mod pipeline;
+pub mod sink;
+pub mod source;
