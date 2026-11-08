@@ -23,3 +23,13 @@ fn checked_in_config_loads_both_endpoints() {
     assert_eq!(config.source.routing_key, "runnel.input");
     assert_eq!(config.sink.routing_key, "runnel.output");
 }
+
+#[test]
+fn pipeline_rejects_missing_or_empty_redaction_path() {
+    let text = "[source]\nurl_env='URL'\nexchange=''\nrouting_key='in'\n[sink]\nurl_env='URL'\nexchange=''\nrouting_key='out'\n";
+    assert!(parse(text).is_err());
+    assert!(parse(&format!("{text}\n[redaction]\npath=[]\n")).is_err());
+    assert!(
+        parse(&format!("{text}\n[redaction]\npath=['request', '']\n")).is_err()
+    );
+}

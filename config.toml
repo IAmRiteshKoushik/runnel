@@ -7,3 +7,6 @@ routing_key = "runnel.input"
 url_env = "RUNNEL_URL"
 exchange = ""
 routing_key = "runnel.output"
+
+[redaction]
+path = ["request", "headers", "authorization"]

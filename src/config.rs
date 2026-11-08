@@ -13,6 +13,12 @@ pub struct Endpoint {
 pub struct Config {
     pub source: Endpoint,
     pub sink: Endpoint,
+    pub redaction: Redaction,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Redaction {
+    pub path: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -23,10 +29,24 @@ struct SourceConfig {
 /// Load both endpoints for a pipeline.
 pub fn load(path: &Path) -> Result<Config, String> {
     let contents = read(path)?;
-    let config: Config = toml::from_str(&contents)
-        .map_err(|_| format!("invalid configuration in {}", path.display()))?;
+    parse(&contents)
+}
+
+fn parse(contents: &str) -> Result<Config, String> {
+    let config: Config = toml::from_str(contents)
+        .map_err(|_| "invalid configuration".to_string())?;
     config.source.validate("source")?;
     config.sink.validate("sink")?;
+    if !config.source.exchange.is_empty() {
+        return Err(
+            "source exchange must be empty; routing_key names the queue".into(),
+        );
+    }
+    if config.redaction.path.is_empty()
+        || config.redaction.path.iter().any(|p| p.trim().is_empty())
+    {
+        return Err("redaction path must contain nonempty object keys".into());
+    }
     Ok(config)
 }
 
