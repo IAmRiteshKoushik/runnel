@@ -6,7 +6,10 @@ pub trait Source {
     type Delivery;
 
     fn body(delivery: &Self::Delivery) -> &[u8];
-
-    async fn receive(&self) -> Result<Option<Self::Delivery>, ()>;
-    async fn settle(delivery: Self::Delivery) -> Result<(), ()>;
+    fn receive(
+        &self,
+    ) -> impl Future<Output = Result<Option<Self::Delivery>, ()>> + Send;
+    fn settle(
+        delivery: Self::Delivery,
+    ) -> impl Future<Output = Result<(), ()>> + Send;
 }
