@@ -3,7 +3,7 @@
 # AMQP: amqp://guest:guest@localhost:5672/%2F
 services:
   rabbitmq:
-    image: docker.io/library/rabbitmq:4-management
+    image: docker.io/library/rabbitmq:4.1-management-alpine
     hostname: runnel-local
     restart: unless-stopped
     environment:
