@@ -4,16 +4,19 @@
 services:
   rabbitmq:
     image: docker.io/library/rabbitmq:4-management
-    hostname: runnel-rabbitmq
+    hostname: runnel-local
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "+S 2:2"
     ports:
-      - "127.0.0.1:5672:5672"
-      - "127.0.0.1:15672:15672"
+      - "127.0.0.1:${RUNNEL_AMQP_PORT:-5672}:5672"
+      - "127.0.0.1:${RUNNEL_MANAGEMENT_PORT:-15672}:15672"
     volumes:
       - runnel_rabbitmq_data:/var/lib/rabbitmq
+      - ./docker/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./docker/definitions.json:/etc/rabbitmq/definitions.json:ro
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
       interval: 10s
