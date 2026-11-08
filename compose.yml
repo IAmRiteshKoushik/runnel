@@ -1,0 +1,25 @@
+# Start: podman compose up -d
+# Web UI: http://localhost:15672 (guest / guest)
+# AMQP: amqp://guest:guest@localhost:5672/%2F
+services:
+  rabbitmq:
+    image: docker.io/library/rabbitmq:4-management
+    hostname: runnel-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - runnel_rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  runnel_rabbitmq_data:
