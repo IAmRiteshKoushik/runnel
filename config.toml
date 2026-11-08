@@ -1,9 +1,9 @@
 [source]
-url_env = "RUNNEL_SOURCE_URL"
+url_env = "RUNNEL_URL"
 exchange = ""
 routing_key = "runnel.input"
 
 [sink]
-url_env = "RUNNEL_SINK_URL"
+url_env = "RUNNEL_URL"
 exchange = ""
 routing_key = "runnel.output"
