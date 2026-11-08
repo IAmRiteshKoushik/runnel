@@ -2,6 +2,9 @@
 list:
   @just --list
 
+run:
+  @cargo run
+
 # Generate and insert logs into RabbitMQ
 loggen *args:
   @cargo run --features workload --bin loggen -- {{args}}
